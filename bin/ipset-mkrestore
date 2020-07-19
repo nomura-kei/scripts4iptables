@@ -1,0 +1,147 @@
+#!/bin/bash
+################################################################################
+## Script    : ipset-mkrestore
+## Name      : ipset create restore file
+## Version   : 0.02
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) ipset-mkrestore [options] zonefile1 [zonefile2...]
+## |
+## |  指定された zone ファイルより、ipset のセット(hash:net) を
+## |  生成/更新するためのリストア用のコマンドを出力します。
+## |
+## |  デフォルトでは、zone ファイル名の拡張子を除いた名前がセット名となります。
+## |  既にセットが生成済みである場合、セットの中身を更新します。
+## |
+## |
+## |[オプション]
+## |  --prefix  prefix  セット名のプレフィックス
+## |  --suffix  suffix  セット名のサフィックス
+## |  --setname setname セット名(zonefile が １つの場合のみ有効)
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+
+
+################################################################################
+#
+# 定数/変数定義
+#
+
+# firewall ベースディレクトリ
+BASE_DIR=${SCRIPT_DIR}/..
+
+# セット名のプレフィックス
+PREFIX=
+
+# セット名のサフィックス
+SUFFIX=
+
+# セット名
+INPUT_SETNAME=
+
+# ゾーンファイル
+ZONE_FILES=
+
+
+
+################################################################################
+##
+## 関数定義
+##
+
+# ------------------------------------------------------------------------------
+#  指定された zone ファイル名より、セット名を生成し、表示します。
+#  セット名は次の優先順で決定されます。
+#  - --setname にて指定されたセット名
+#  - 拡張子を除いた zone ファイル名に prefix, suffix を付与したセット名
+#
+#  @param $1    zone ファイル
+# ------------------------------------------------------------------------------
+function print_setname()
+{
+	ZONE_FILE=$1
+	if [ "${INPUT_SETNAME}" = "" ]; then
+		SETNAME="${ZONE_FILE##*/}"
+		SETNAME="${SETNAME%%.zone}"
+		SETNAME="${PREFIX}${SETNAME}${SUFFIX}"
+	else
+		SETNAME="${INPUT_SETNAME}"
+	fi
+	echo "${SETNAME}"
+}
+
+
+# ------------------------------------------------------------------------------
+#  指定された zone ファイル名より、セット(hash:net)を構築するコマンドを出力します。
+#  既にセットが存在する場合、fluash した後に、セットを再構築します。
+#
+#  @param $1    セット名
+#  @param $2    zone ファイル
+# ------------------------------------------------------------------------------
+function create_set()
+{
+	SETNAME=$1
+	ZONE_FILE=$2
+
+	# hash:net 生成/クリア
+	ipset list ${SETNAME} > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		echo "flush ${SETNAME}"
+	else
+		echo "create ${SETNAME} hash:net"
+	fi
+
+	# zone ファイルより、セットへの追加コマンドを出力する
+	sed -e "s/^\(.*\)$/add ${SETNAME} \1/" ${ZONE_FILE}
+}
+
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			'--prefix')			PREFIX="$2";		OPT_ARG=1;	shift	;;
+			'--suffix')			SUFFIX="$2"; 		OPT_ARG=1;	shift	;;
+			'--setname')		INPUT_SETNAME="$2";	OPT_ARG=1;	shift	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					ZONE_FILES=("${ZONE_FILES[@]}" "$1")
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+
+# --setname 指定の場合、複数のゾーンファイル指定は NG とする。
+if [ "${INPUT_SETNAME}" != "" ]; then
+	if [ ${#ZONE_FILES[@]} -gt 2 ]; then
+		usage
+		exit 1
+	fi
+fi
+
+
+# 指定された zone ファイル数分ループする
+for ZONE_FILE in ${ZONE_FILES[@]}; do
+	SETNAME=`print_setname "${ZONE_FILE}"`
+	create_set "${SETNAME}" "${ZONE_FILE}"
+done
+

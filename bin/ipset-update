@@ -1,0 +1,166 @@
+#!/bin/bash
+################################################################################
+## Script    : ipset-update
+## Name      : ipset update
+## Version   : 0.02
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) ipset-update [options]
+## |
+## |  zone.conf の設定に従い、ipset の情報を更新します。
+## |
+## |[オプション]
+## |  -f config_file    指定された設定ファイルに従い、ipset の情報を更新します。
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+
+
+################################################################################
+#
+# 定数/変数定義
+#
+
+# firewall ベースディレクトリ
+BASE_DIR=${SCRIPT_DIR}/..
+
+# zone ファイル格納ディレクトリ
+ZONE_DIR=${BASE_DIR}/zone
+
+# 設定ファイル
+CONFIG_FILE=${BASE_DIR}/conf/zone.conf
+
+
+
+################################################################################
+##
+## 関数定義
+##
+
+# ------------------------------------------------------------------------------
+#  設定ファイルをロードします。
+#
+#  @return 0/1 (ロード成功/失敗)
+# ------------------------------------------------------------------------------
+function load_config()
+{
+	if [ -f ${CONFIG_FILE} ]; then
+		. ${CONFIG_FILE}
+		return 0
+	else
+		echo "can't load ${CONFIG_FILE}"
+		return 1
+	fi
+}
+
+
+# ------------------------------------------------------------------------------
+#  全セットを更新するためのリストアファイル用のコマンドを出力します。
+# ------------------------------------------------------------------------------
+function mkrestore_all()
+{
+	# white-list の更新
+	for COUNTRY in ${WHITE_LIST_COUNTRIES[@]}; do
+		printf "\e[0mcreate white-list-${COUNTRY}   "	1>&2
+		${SCRIPT_DIR}/ipset-mkrestore --prefix white-list- ${ZONE_DIR}/${COUNTRY}.zone
+		if [ $? -eq 0 ]; then
+			printf "\t\t[   \e[32mOK\e[0m   ]\n"		1>&2
+		else
+			printf "\t\t[   \e[31mNG\e[0m   ]\n"		1>&2
+		fi
+	done
+
+	# black-list の更新
+	for COUNTRY in ${BLACK_LIST_COUNTRIES[@]}; do
+		printf "\e[0mcreate black-list-${COUNTRY}   "	1>&2
+		${SCRIPT_DIR}/ipset-mkrestore --prefix black-list- ${ZONE_DIR}/${COUNTRY}.zone
+		if [ $? -eq 0 ]; then
+			printf "\t\t[   \e[32mOK\e[0m   ]\n"		1>&2
+		else
+			printf "\t\t[   \e[31mNG\e[0m   ]\n"		1>&2
+		fi
+	done
+
+	# 上記、国以外のセット更新
+	for OTHER in ${IPSET_ZONE_FILES[@]}; do
+		if [ "${OTHER}" != "" ]; then
+			touch "${OTHER}"
+		fi
+	done
+	printf "\e[0mcreate other          "	1>&2
+	${SCRIPT_DIR}/ipset-mkrestore "${IPSET_ZONE_FILES[@]}"
+	if [ $? -eq 0 ]; then
+		printf "\t\t[   \e[32mOK\e[0m   ]\n"		1>&2
+	else
+		printf "\t\t[   \e[31mNG\e[0m   ]\n"		1>&2
+	fi
+}
+
+
+# ------------------------------------------------------------------------------
+#  指定されたファイルより ipset をリストアします。
+#
+#  @param $1 リストアするファイル
+# ------------------------------------------------------------------------------
+function restore_all()
+{
+	RESTORE_FILE=$1
+	printf "\e[0mipset update          "	1>&2
+	ipset restore < ${RESTORE_FILE}
+	if [ $? -eq 0 ]; then
+		printf "\t\t[   \e[32mOK\e[0m   ]\n"		1>&2
+	else
+		printf "\t\t[   \e[31mNG\e[0m   ]\n"		1>&2
+	fi
+}
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			'-f')				CONFIG_FILE=$2;	OPT_ARG=1;		shift	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					usage
+					exit 1
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+
+# 設定ロード
+load_config
+
+# zone ファイルダウンロード
+${SCRIPT_DIR}/dl-zone-files "${WHITE_LIST_COUNTRIES[@]} ${BLACK_LIST_COUNTRIES[@]}"
+
+# ipset のリストア用ファイル生成
+RESTORE_FILE=$(mktemp /tmp/ipset.XXXXXX.tmp)
+trap 'rm -f ${RESTORE_FILE}' 1 2 3 15
+
+mkrestore_all > ${RESTORE_FILE}
+
+# リストア実施！
+restore_all ${RESTORE_FILE}
+
+# 後始末
+rm -f ${RESTORE_FILE}
+

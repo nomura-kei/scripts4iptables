@@ -1,0 +1,106 @@
+#!/bin/bash
+################################################################################
+## Script    : all-save
+## Name      : ipset and iptables save
+## Version   : 0.02
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) ipset-save [options]
+## |
+## |  ipset, iptables の情報を保存し、起動時に自動反映するようにします。
+## |  事前に下記コマンドでソフトウェアをインストールしておく必要があります。
+## |  apt install netfilter-persistent
+## |  apt install iptables-persistent
+## |  apt installl ipset-persistent
+## |
+## |[オプション]
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+
+
+################################################################################
+#
+# 定数/変数定義
+#
+
+# firewall ベースディレクトリ
+BASE_DIR=${SCRIPT_DIR}/..
+
+# 保存先
+FILE_IPSETS=/etc/iptables/ipsets
+FILE_RULES_V4=/etc/iptables/rules.v4
+FILE_RULES_V6=/etc/iptables/rules.v6
+
+
+################################################################################
+##
+## 関数定義
+##
+
+# ------------------------------------------------------------------------------
+#  設定ファイルをセーブします。
+# ------------------------------------------------------------------------------
+function save_config()
+{
+	# ipsets 保存
+	if [ -f ${FILE_IPSETS} ]; then
+		mv ${FILE_IPSETS} ${FILE_IPSETS}.old
+	fi
+	/sbin/ipset save -f ${FILE_IPSETS}
+	chmod 0640 ${FILE_IPSETS}
+
+	# iptables 保存
+	if [ -f ${FILE_RULES_V4} ]; then
+		mv ${FILE_RULES_V4} ${FILE_RULES_V4}.old
+	fi
+	if [ -x /sbin/iptables-save ]; then
+		/sbin/iptables-save > ${FILE_RULES_V4}
+		chmod 0640 ${FILE_RULES_V4}
+	fi
+
+	# ip6tables 保存
+	if [ -f ${FILE_RULES_V6} ]; then
+		mv ${FILE_RULES_V6} ${FILE_RULES_V6}.old
+	fi
+	if [ -x /sbin/ip6tables-save ]; then
+		/sbin/ip6tables-save > ${FILE_RULES_V6}
+		chmod 0640 ${FILE_RULES_V6}
+	fi
+}
+
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					usage
+					exit 1
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+
+# 設定保存
+save_config
+

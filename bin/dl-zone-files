@@ -1,0 +1,171 @@
+#!/bin/bash
+################################################################################
+## Script    : dl-zone-files
+## Name      : zone file download script
+## Version   : 0.03
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) dl-zone-file [options] country_list
+## |
+## |  指定された国の zone ファイルをダウンロードします。
+## |  国の zone ファイルは、下記 URL のファイルを使用します。
+## |  http://www.ipdeny.com/ipblocks/data/countries
+## |
+## |  ダウンロード先ディレクトリに、1日以内にダウンロードした
+## |  ファイルが存在する場合は、何も実施しません。
+## |  ※強制的にダウンロードする場合は、-f オプションを使用ください。
+## |
+## |[オプション]
+## |  -d directory  zone ファイルダウンロード先ディレクトリ
+## |  -f,--force    強制ダウンロード
+## |  -h,--help     使用方法を表示します。
+## |  -v,--version  バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+
+
+################################################################################
+#
+# 定数/変数定義
+#
+
+# zone ファイル URL ベース
+URL_BASE=http://www.ipdeny.com/ipblocks/data/countries
+
+# firewall ベースディレクトリ
+BASE_DIR=${SCRIPT_DIR}/..
+
+# zone ファイル再ダウンロード抑止期間 [sec]
+DL_SKIP_PERIOD=86400
+
+# zone ファイル格納ディレクトリ
+ZONE_DIR=${BASE_DIR}/zone
+
+# 強制ダウンロードフラグ
+IS_FORCE=n
+
+# 国リスト
+COUNTRIES=()
+
+
+
+################################################################################
+##
+## 関数定義
+##
+
+# ------------------------------------------------------------------------------
+#  指定された国の zone ファイルのダウンロード要否を判定します。
+#  下記すべての条件を満たす場合、ダウンロード不要と判断します。
+#  - 強制ダウンロードオプション(-f,--force) が指定されていない。
+#  - 既に zoneファイルがダウンロードされている。
+#  - zone ファイルが最終ダウンロード時間から1日以上経過している。
+#
+#  @param $1    国(2文字表現)
+#  @return 1/0  ダウンロード要/不要
+# ------------------------------------------------------------------------------
+function is_need_dl_zone_file()
+{
+	COUNTRY=$1
+	IS_NEED=1
+
+	if [ "${IS_FORCE}" == "y" ]; then
+		# 強制ダウンロードオプションが指定されている。
+		return ${IS_NEED}
+	fi
+
+	if [ ! -f "${ZONE_DIR}/${COUNTRY}.zone" ]; then
+		# zone ファイルがダウンロードされていない。
+		return ${IS_NEED}
+	fi
+
+	FILE_TIME=`date "+%s" -r ${ZONE_DIR}/${COUNTRY}.zone`
+	NOW_TIME=`date "+%s"`
+	DIFF_TIME=`expr ${NOW_TIME} - ${FILE_TIME}`
+	if [ ${DIFF_TIME} -lt ${DL_SKIP_PERIOD} ]; then
+		# - 最終ダウンロード時刻から1日以上経過している 
+		IS_NEED=0
+	fi
+
+	return ${IS_NEED}
+}
+
+
+# ------------------------------------------------------------------------------
+#  古い zone ファイルがある場合、バックアップします。
+#
+#  @param $1    国(2文字表現)
+#  @return 1/0  更新要/更新不要
+# ------------------------------------------------------------------------------
+function backup_zone_file()
+{
+	COUNTRY=$1
+	if [ -f ${ZONE_DIR}/${COUNTRY}.zone ]; then
+		mv -f ${ZONE_DIR}/${COUNTRY}.zone ${ZONE_DIR}/${COUNTRY}.zone.old
+	fi
+}
+
+
+# ------------------------------------------------------------------------------
+#  指定された国(2文字表現)の zone ファイルをダウンロードします。
+#  更新不要である場合、なにもしません。
+#
+#  @param $1    国(2文字表現)
+#  @return 1/0  更新要/更新不要
+# ------------------------------------------------------------------------------
+function dl_zone_file()
+{
+	COUNTRY=$1
+	printf "\e[0mdownload %-10s " "${COUNTRY}.zone"
+	is_need_dl_zone_file ${COUNTRY}
+	if [ $? -ne 0 ]; then
+		mkdir -p ${ZONE_DIR}
+		backup_zone_file ${COUNTRY}
+		curl -f -o ${ZONE_DIR}/${COUNTRY}.zone ${URL_BASE}/${COUNTRY}.zone > /dev/null 2>&1
+		if [ $? -ne 0 ]; then
+			printf "\t\t[  \e[31mNG\e[0m  ]\n"
+			rm -f ${ZONE_DIR}/${COUNTRY}.zone
+		else
+			printf "\t\t[   \e[32mOK\e[0m   ]\n"
+		fi
+	else
+			printf "\t\t[  \e[33mSKIP\e[0m  ]\n"
+	fi
+}
+
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;						exit 1	;;
+			'-v'|'--version')	version;					exit 1	;;
+			'-f'|'--force')		IS_FORCE=y;							;;
+			'-d')				ZONE_DIR="$2";OPT_ARG=1;	shift	;;
+			-*)					usage;						exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					COUNTRIES=("${COUNTRIES[@]}" "$1")
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+for COUNTRY in ${COUNTRIES[@]}; do
+	dl_zone_file "${COUNTRY}"
+done
+
+
