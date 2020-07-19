@@ -35,39 +35,51 @@ iptables の設定を簡略化するためのスクリプトです。
 
 ## 設定
 conf/zone.conf の編集
+
 - WHITE_LIST_CONTRIES
 -- ホワイトリストとする国の2文字コードをスペース区切りで記載します。
 	例) 日本と台湾を有効にする場合
 	WHITE_LIST_COUNTRIES=( "jp" "tw" )
+
 - BLACK_LIST_COUNTRIES
 -- ブラックリストとする国の2文字コードをスペース区切りで記載します。
+
 - LOCALNET_LIST
 -- ローカルネット(基本的に全サービスを提供するネットワーク)を記載したファイルを指定します。
 デフォルトでは、下記が記載されているファイル(${ZONE_DIR}/localnet-list.zone)が指定されます。
+
 	10.0.0.0/8
 	172.16.0.0/12
 	192.168.0.0/16
+
 - TRASTED_LIST
 -- 信頼できるアドレス(SSHアクセスを許可するアドレスなど)を記載したファイルを指定します。
 bin/ipset-update を実行した際、現在接続されている ssh の接続元が追記されます。
+
 - WHITE_LIST_OTHER
 -- ホワイトリストとするIPアドレスを記載します。
+
 - BLACK_LIST_OTHER
 --ブラックリストとするIPアドレスを記載します。
 
 ## 設定反映
 - 次のコマンドを実行して設定を反映します。
+
 	bin/ipset-update
 	bin/iptables-update
+
 ※ホワイトリスト、ブラックリストのIPアドレスを更新する場合は、bin/ipset-update のみ実施ください。
 
 
 ## 設定の保存し、再起動時にも有効とする。(Debian 系のみ)
 - 次のコマンドを実行しツールをインストールします。
+
 	apt install netfilter-persistent	# 再起動後も設定を有効にするために利用します。
 	apt install iptables-persistent		# 同上
 	apt install ipset-persistent		# 同上
+
 - 次のコマンドを実行して設定を保存します。
+
 	bin/all-save
 
 
