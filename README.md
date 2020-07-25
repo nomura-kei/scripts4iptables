@@ -85,7 +85,7 @@ bin/ipset-update を実行した際、現在接続されている ssh の接続�
 
 ---
 
-## 機能を追加する人向け説明
+## 機能, フィルタルールを追加、変更する人向け説明
 
 ### 構成
 	+-- bin/
@@ -106,4 +106,38 @@ bin/ipset-update を実行した際、現在接続されている ssh の接続�
 	+-- README.md            : 本ファイル
 
 ※それぞれのスクリプトの使い方は、--help オプションで確認してください。
+
+### 現状のルール
+次の 1～ 順番に適用されます。
+
+1. conf/rule.d/v4/00_init.sh
+- ループバックの通信をすべて許可
+- 接続中の SSH 通信を許可
+- ローカルネット (localnet-list), 信頼できるネットワーク (trusted-list) からの SSH 通信を許可
+- 接続確立後の応答パケットを許可
+- IGMP パケットを許可
+
+2. conf/rule.d/v4/20_blacklist.sh
+- ブラックリストからの通信を拒否
+
+3. conf/rule.d/v4/21_reject.sh
+- IDENT/AUTH への要求に対して、REJECT を返す。(DROP の場合にメール処理が遅くなることを防ぐため)
+
+4. conf/rule.d/v4/30_attack_sthelthscan.sh
+- ステルススキャン攻撃を防ぐ
+
+5. conf/rule.d/v4/31_attack_pingofdeath.sh
+- Ping Of Death 攻撃を防ぐ
+
+6. conf/rule.d/v4/32_attack_synflood.sh
+- SYNFLOOD 攻撃を防ぐ
+
+7. conf/rule.d/v4/40_localnet.sh
+- ローカルネット (localnet-list) からのプロキシ機能(TCP, Port=3129) へのアクセスを許可する。
+
+8. conf/rule.d/v4/40_whitelist.sh
+- ホワイトリストからの SSH アクセスを許可する。
+
+9. conf/rule.d/v4/50_public.sh
+- HTTP(Port=80), HTTPS(Port=443) へのアクセスを許可する。
 
