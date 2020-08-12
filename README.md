@@ -83,6 +83,24 @@ bin/ipset-update を実行した際、現在接続されている ssh の接続�
 	bin/all-save
 
 
+
+## ログをデータベース (SQLite3) に保存する
+- 次のコマンドを実行し sqlite をインストールします。
+
+	apt install sqlite
+
+- DB 初期化のため次のコマンドを実行します。
+
+	bin/db-init
+
+- ログ記録のため、定期的に次のコマンドを実行します。
+
+	bin/db-logging-attacklog
+
+crontab 設定例
+ 0 * * * * * /opt/firewall/bin/db-logging-attacklog
+
+ 
 ---
 
 ## 機能, フィルタルールを追加、変更する人向け説明

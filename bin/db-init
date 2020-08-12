@@ -1,0 +1,53 @@
+#!/bin/bash
+################################################################################
+## Script    : db-init
+## Name      : init database
+## Version   : 0.01
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) db-init [options]
+## |
+## | ブロックしたパケット数を記録するための DB 初期化を実施します。
+## |
+## |[オプション]
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+
+DBFILE=${SCRIPT_DIR}/../data/firewall.db
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					usage
+					exit 1
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+mkdir -p "${SCRIPT_DIR}/../data"
+sqlite3 ${DBFILE} "create table attack_log(date TEXT NOT NULL, type TEXT NOT NULL, value INTEGER, PRIMARY KEY(date, type));"
+sqlite3 ${DBFILE} "create index dateindex on attack_log(date);"
+sqlite3 ${DBFILE} "create index typeindex on attack_log(type);"
+

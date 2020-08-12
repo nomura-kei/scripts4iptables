@@ -1,0 +1,64 @@
+#!/bin/bash
+################################################################################
+## Script    : db-logging-attacklog
+## Name      : attack ログをDBに書き込みます。
+## Version   : 0.01
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) db-logging-attacklog [options]
+## |
+## |  attack ログを DB に書き込みます。
+## |
+## |[オプション]
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+DBFILE=${SCRIPT_DIR}/../data/firewall.db
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					usage
+					exit 1
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+SQLCMD="insert into attack_log (date, type, value) values"
+DATETIME=`date "+%Y-%m-%d %H:%M:%S"`
+SQL=`iptables -v -L							\
+	| grep	-e "black-list-"			\
+			-e "ping_of_death_attack"	\
+			-e "stealth_scan_attack"	\
+			-e "syn_flood_attack"		\
+	| sed	-e "s/match-set black-list-\([a-zA-Z0-9]\+\) src/blacklist-\1/"		\
+			-e "s/LOG level.*ping_of_death_attack.*$/ping-of-death/"			\
+			-e "s/limit.*stealth_scan_attack.*$/stealth_scan/"					\
+			-e "s/LOG level warning prefix .*syn_flood_attack.*$/syn_flood/"	\
+			| awk -v sqlcmd="${SQLCMD}" -v datetime="${DATETIME}" '{printf "%s (\047%s\047, \047%s\047, %d);", sqlcmd, datetime, $10, $1}'`
+
+# echo "${SQL}"
+sqlite3 ${DBFILE} "${SQL}"
+if [ $? -eq 0 ]; then
+	iptables -Z
+fi
