@@ -1,0 +1,98 @@
+<!DOCTYPE html >
+<html>
+  <head>
+    <meta charset="utf-8">
+	<title>Attack Graph</title>
+	<script src="js/axios.min.js"></script>
+	<script src="js/Chart.bundle.js"></script>
+	<script src="js/vue.min.js"></script>
+  </head>
+  <body>
+	<div id='attack-graph'>
+		<select v-model="selected" id="viewtype">
+			<option value="blacklist-hour">ブラックリストからの攻撃頻度グラフ (時間単位)</option>
+			<option value="blacklist-day">ブラックリストからの攻撃頻度グラフ (日単位)</option>
+			<option value="attacklist-hour">攻撃種別頻度グラフ (時間単位)</option>
+			<option value="attacklist-day">攻撃種別頻度グラフ (日単位)</option>
+			<option value="blacklist-hour-sum">ブラックリストからの攻撃頻度グラフ (時間単位合計)</option>
+		</select>
+		<canvas id="attack"></canvas>
+	</div>
+	<script>
+		<!-- 変換リスト -->
+		const LABELS = {
+			"cn" : "中国",
+			"ru" : "ロシア",
+			"kr" : "北朝鮮",
+			"kp" : "韓国",
+			"ping_of_death" : "Ping Of Death",
+			"syn_flood"     : "SYN Flood",
+			"stealth_scan"  : "ステルススキャン"
+		};
+		<!-- 色リスト -->
+		const BKCOLORS = [
+			"rgba(255,  0,  0,0.5)",
+			"rgba(  0,255,  0,0.5)",
+			"rgba(  0,  0,255,0.5)",
+			"rgba(255,255,  0,0.5)",
+			"rgba(  0,255,255,0.5)",
+			"rgba(255,  0,255,0.5)"
+		];
+		function updateGraph(target)
+		{
+			let date = new Date();
+			axios.get('data/' + target + '.json?date=' + date.getTime())
+				.then(response => {
+					var ctx = document.getElementById("attack");
+					var jsonData = { 
+						type: 'line',
+						data: {},
+						options: {
+							title: {
+								display: true,
+								text: 'サーバー攻撃頻度'
+							},
+							scales:{
+								yAxes: [{
+									ticks: {
+			//							suggestedMax: 50,
+										suggestedMin: 0,
+			//							stepSize : 5,
+										callback: function(value, index, values) {
+											return value + '回'
+										}
+									}
+								}]
+							}
+						}
+					}
+
+					jsonData['data'] = response.data;
+					for (let i = 0; i < jsonData['data'].datasets.length; i++)
+					{
+						jsonData['data'].datasets[i].backgroundColor = BKCOLORS[i];
+						if (LABELS[jsonData['data'].datasets[i].label])
+						{
+							jsonData['data'].datasets[i].label = LABELS[jsonData['data'].datasets[i].label];
+						}
+					}
+					var myChart = new Chart(ctx, jsonData);
+				});
+		}
+		updateGraph('blacklist-hour');
+
+		var app = new Vue({
+			el : '#attack-graph',
+			data : {
+				selected: "blacklist-hour"
+			},
+			watch : {
+				selected : function(newVal, oldVal) {
+					updateGraph(newVal);
+				}
+			}
+		})
+	</script>
+  </body>
+</html>
+

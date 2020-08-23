@@ -14,11 +14,13 @@
 ## |  -h,--help         使用方法を表示します。
 ## |  -v,--version      バージョンを表示します。
 ## |
+export PATH=/bin:/sbin:/usr/bin/:/usr/sbin
 SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
 SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
 . ${SCRIPT_DIR}/bash-utils.sh
 
 DBFILE=${SCRIPT_DIR}/../data/firewall.db
+
 
 ################################################################################
 #
@@ -62,3 +64,4 @@ sqlite3 ${DBFILE} "${SQL}"
 if [ $? -eq 0 ]; then
 	iptables -Z
 fi
+

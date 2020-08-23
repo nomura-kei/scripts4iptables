@@ -1,0 +1,145 @@
+#!/bin/bash
+################################################################################
+## Script    : db-to-json
+## Name      : DBに格納されている attack log をjson 形式に変換します。
+## Version   : 0.01
+## Copyright : 2020  Nomura Kei
+## License   : BSD-2-Clause
+## Usage:
+## |使用法) db-to-json [options]
+## |
+## |  DBに格納されている attack log をjson 形式に変換します。
+## |
+## |[オプション]
+## |  -h,--help         使用方法を表示します。
+## |  -v,--version      バージョンを表示します。
+## |
+export PATH=/bin:/sbin:/usr/bin/:/usr/sbin
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+SCRIPT_FILE=${SCRIPT_DIR}/$(basename ${BASH_SOURCE:-$0})
+. ${SCRIPT_DIR}/bash-utils.sh
+
+CONFFILE=${SCRIPT_DIR}/../conf/zone.conf
+DBFILE=${SCRIPT_DIR}/../data/firewall.db
+BLACKLIST_DAY=${SCRIPT_DIR}/../html/data/blacklist-day.json
+BLACKLIST_HOUR=${SCRIPT_DIR}/../html/data/blacklist-hour.json
+BLACKLIST_HOUR_SUM=${SCRIPT_DIR}/../html/data/blacklist-hour-sum.json
+ATTACKLIST_DAY=${SCRIPT_DIR}/../html/data/attacklist-day.json
+ATTACKLIST_HOUR=${SCRIPT_DIR}/../html/data/attacklist-hour.json
+
+
+
+################################################################################
+#
+# メイン処理
+#
+OPT_ARG=0
+for OPT in "$@"; do
+	if [ ${OPT_ARG} -eq 1 ]; then
+		OPT_ARG=0
+	else
+		case "${OPT}" in
+			'-h'|'--help')		usage;							exit 1	;;
+			'-v'|'--version')	version;						exit 1	;;
+			-*)					usage;							exit 1	;;
+			*)
+				if [[ ! -z "$1" ]] && [[ ! "$1" =~ ^-+ ]]; then
+					usage
+					exit 1
+				fi
+				;;
+		esac
+		shift
+	fi
+done
+
+
+
+#
+# blacklist の dataset を出力します。
+#
+function print_blacklist_datasets()
+{
+	SELECT_CMD_LABEL=$1
+	SELECT_CMD_DATA=$2
+	echo "{"
+	echo -e "\t\"labels\" : ["
+	sqlite3 ${DBFILE} "${SELECT_CMD_LABEL}" | sed -e 's/^\(.*\)$/\t\t"\1",/' -e "$ s/.$//"
+	echo -e "\t],"
+	echo -e "\t\"datasets\" : ["
+	
+	BLACKLIST=`grep BLACK_LIST_COUNTRIES ${CONFFILE} | sed -e "s/^.*(//" -e "s/)//" -e "s/\"//g"`
+	
+	for COUNTRY in ${BLACKLIST}; do
+		echo -e "\t\t{"
+		echo -e "\t\t\t\"label\" : \"${COUNTRY}\","
+		echo -e "\t\t\t\"data\" : ["
+		SELECT_CMD_DATA_TMP=`printf "${SELECT_CMD_DATA}" ${COUNTRY}`
+		sqlite3 ${DBFILE} "${SELECT_CMD_DATA_TMP}" | sed -e 's/^\(.*\)$/\t\t\t\t\1,/' -e "$ s/,$//"
+		echo -e "\t\t\t]"
+		echo -e "\t\t},"
+	done | sed -e '$ s/,$//'
+	
+	echo -e "\t]"
+	echo -e "}"
+}
+
+#
+# その他攻撃の dataset を出力します。
+#
+function print_attacklist_datasets()
+{
+	SELECT_CMD_LABEL=$1
+	SELECT_CMD_DATA=$2
+	echo "{"
+	echo -e "\t\"labels\" : ["
+	sqlite3 ${DBFILE} "${SELECT_CMD_LABEL}" | sed -e 's/^\(.*\)$/\t\t"\1",/' -e "$ s/.$//"
+	echo -e "\t],"
+	echo -e "\t\"datasets\" : ["
+	
+	BLACKLIST=`grep BLACK_LIST_COUNTRIES ${CONFFILE} | sed -e "s/^.*(//" -e "s/)//" -e "s/\"//g"`
+	
+	ATTACKLIST="ping-of-death stealth_scan syn_flood"
+	for ATTACK in ${ATTACKLIST}; do
+		echo -e "\t\t{"
+		echo -e "\t\t\t\"label\" : \"${ATTACK}\","
+		echo -e "\t\t\t\"data\" : ["
+		SELECT_CMD_DATA_TMP=`printf "${SELECT_CMD_DATA}" ${ATTACK}`
+		sqlite3 ${DBFILE} "${SELECT_CMD_DATA_TMP}" | sed -e 's/^\(.*\)$/\t\t\t\t\1,/' -e "$ s/,$//"
+		echo -e "\t\t\t]"
+		echo -e "\t\t},"
+	done | sed -e '$ s/,$//'
+	
+	echo -e "\t]"
+	echo -e "}"
+}
+
+
+
+# yyyy-mm-dd hh:00:00
+
+# 時間単位 - ブラックリスト
+SELECT_CMD_LABEL="select strftime('%Y-%m-%d %H:00:00', date) as d1 from attack_log group by d1 order by d1;"
+SELECT_CMD_DATA="select sum(value) from attack_log where type = 'blacklist-%s' group by strftime('%%Y-%%m-%%d %%H:00:00', date) order by date;"
+print_blacklist_datasets "${SELECT_CMD_LABEL}" "${SELECT_CMD_DATA}" > ${BLACKLIST_HOUR}
+
+# 時間総計 - ブラックリスト
+SELECT_CMD_LABEL="select strftime('%H:00:00', date) as d1 from attack_log group by d1 order by d1;"
+SELECT_CMD_DATA="select sum(value) from attack_log where type = 'blacklist-%s' group by strftime('%%H:00:00', date) order by date;"
+print_blacklist_datasets  "${SELECT_CMD_LABEL}" "${SELECT_CMD_DATA}" > ${BLACKLIST_HOUR_SUM}
+
+# 時間単位 - 攻撃パターン
+SELECT_CMD_LABEL="select strftime('%Y-%m-%d %H:00:00', date) as d1 from attack_log group by d1 order by d1;"
+SELECT_CMD_DATA="select sum(value) from attack_log where type = '%s' group by strftime('%%Y-%%m-%%d %%H:00:00', date) order by date;"
+print_attacklist_datasets  "${SELECT_CMD_LABEL}" "${SELECT_CMD_DATA}" > ${ATTACKLIST_HOUR}
+
+# yyyy-mm-dd
+# 日単位
+SELECT_CMD_LABEL="select strftime('%Y-%m-%d', date) as d1 from attack_log group by d1 order by d1;"
+SELECT_CMD_DATA="select sum(value) from attack_log where type = 'blacklist-%s' group by strftime('%%Y-%%m-%%d', date) order by date;"
+print_blacklist_datasets "${SELECT_CMD_LABEL}" "${SELECT_CMD_DATA}" > ${BLACKLIST_DAY}
+
+SELECT_CMD_LABEL="select strftime('%Y-%m-%d', date) as d1 from attack_log group by d1 order by d1;"
+SELECT_CMD_DATA="select sum(value) from attack_log where type = '%s' group by strftime('%%Y-%%m-%%d', date) order by date;"
+print_attacklist_datasets  "${SELECT_CMD_LABEL}" "${SELECT_CMD_DATA}" > ${ATTACKLIST_DAY}
+
