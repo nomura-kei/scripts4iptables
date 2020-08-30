@@ -9,7 +9,7 @@
   </head>
   <body>
 	<div id='attack-graph'>
-		<select v-model="selected" id="viewtype">
+		<select v-model="graphType" id="viewtype">
 			<option value="blacklist-hour">ブラックリストからの攻撃頻度グラフ (時間単位)</option>
 			<option value="blacklist-day">ブラックリストからの攻撃頻度グラフ (日単位)</option>
 			<option value="attacklist-hour">攻撃種別頻度グラフ (時間単位)</option>
@@ -19,6 +19,7 @@
 		<canvas id="attack"></canvas>
 	</div>
 	<script>
+	Vue.config.devtools = true;
 		<!-- 変換リスト -->
 		const LABELS = {
 			"cn" : "中国",
@@ -38,8 +39,10 @@
 			"rgba(  0,255,255,0.5)",
 			"rgba(255,  0,255,0.5)"
 		];
+		var myChart;
 		function updateGraph(target)
 		{
+			if (myChart) { myChart.destroy(); }
 			let date = new Date();
 			axios.get('data/' + target + '.json?date=' + date.getTime())
 				.then(response => {
@@ -76,7 +79,7 @@
 							jsonData['data'].datasets[i].label = LABELS[jsonData['data'].datasets[i].label];
 						}
 					}
-					var myChart = new Chart(ctx, jsonData);
+					myChart = new Chart(ctx, jsonData);
 				});
 		}
 		updateGraph('blacklist-hour');
@@ -84,10 +87,10 @@
 		var app = new Vue({
 			el : '#attack-graph',
 			data : {
-				selected: "blacklist-hour"
+				graphType : "blacklist-hour"
 			},
 			watch : {
-				selected : function(newVal, oldVal) {
+				graphType : function(newVal, oldVal) {
 					updateGraph(newVal);
 				}
 			}
