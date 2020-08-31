@@ -38,8 +38,10 @@
 			"rgba(  0,255,255,0.5)",
 			"rgba(255,  0,255,0.5)"
 		];
+		var myChart;
 		function updateGraph(target)
 		{
+			if (myChart) { myChart.destroy(); }
 			let date = new Date();
 			axios.get('data/' + target + '.json?date=' + date.getTime())
 				.then(response => {
@@ -76,7 +78,7 @@
 							jsonData['data'].datasets[i].label = LABELS[jsonData['data'].datasets[i].label];
 						}
 					}
-					var myChart = new Chart(ctx, jsonData);
+					myChart = new Chart(ctx, jsonData);
 				});
 		}
 		updateGraph('blacklist-hour');
