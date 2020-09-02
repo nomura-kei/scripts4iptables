@@ -113,6 +113,7 @@ crontab 設定例
 	|    +-- ipset-update    : zone.conf の設定に従い、ipset 情報を更新するスクリプト。
 	|    +-- iptables-clear  : iptables の情報をクリアするスクリプト。
 	|    +-- iptables-update : conf/rule.d 配下のルールに従い、iptables の情報を更新するスクリプト。
+	|    +-- db-logging-attacklog : ログを記録するスクリプト。
 	|
 	+-- conf/
 	|    +-- zone.conf       : 設定ファイルです。
@@ -121,6 +122,8 @@ crontab 設定例
 	|
 	+-- zone/                : ipset に利用する IPアドレスのリストなどを記載したファイルが格納されます。
 	|        
+	+-- html/                : ログを Web より確認するためのコンテンツなどを格納しています。
+	|
 	+-- README.md            : 本ファイル
 
 ※それぞれのスクリプトの使い方は、--help オプションで確認してください。
